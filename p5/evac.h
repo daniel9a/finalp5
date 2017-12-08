@@ -4,33 +4,31 @@
 
 #include "EvacRunner.h"
 
-class CityInfo
+class Road4
 {
 public:
-      bool known, deadEnd, evacuatedCity;
+      int destinationCityID;
+      int peoplePerHour;
+      int occupied;
+};
+
+
+class City4
+{
+public:
       int *edgeID;
-      int maxPeople;
-      int evacPeople;
-      char numEdges;
-      int depth;
+      int population;
+      int evacuees;
+      int roadCount;
       bool visited;
-      CityInfo():known(false), deadEnd(true), evacuatedCity(false), evacPeople(0), visited(false) {}
+      bool cityEvac;
 };
 
-class RoadEdge
-{
-public:
-      int destCityID;
-      int weight;
-      int used;
-      RoadEdge():used(0) {}
-};
-
-class EvacInfo
+class EvacRoute4
 {
 public:
       int ID;
-      float ratio;
+      float numPeople;
 };
 
 
@@ -38,29 +36,23 @@ class Evac
 {
 public:
 
-    CityInfo *cities;
-    RoadEdge *edge;
-    EvacInfo *evacCities;
+    City4 *cities;
+    Road4 *roads;
+    EvacRoute4 *evacCities;
     int numCities;
-    int hour;
-    int *evacQ, back, front;
-    int *visitedIDs, visitedSize;
-    int *usedRoads, usedCount;
-	/*
-    City* cities;;
-    int numCities;
-    MaxFlow *maxflow; */
-    /*
-    int numRoads;
-    int evacID;
-    int currentCity;
-    int timer; //need to set it equal to 1*/
-	int dfs(int cityID, int needed, int sourceCityID);
+    int timer;
+    int *queue;
+    int queueB;
+    int queueF;
+    int *visitedIDs;
+    int visitedSize;
+    int *roadsOccupied;
+    int count;
+
+	int dfs(int cityID, int needed, int source);
    	Evac(City *cities, int numCities, int numRoads);
   	void evacuate(int *evacIDs, int numEvacs, EvacRoute *evacRoutes, int &routeCount); // student sets evacRoutes and routeCount
 
-//    void Graph(int numCities);
-//    void bfs(int *evacIDs, int numEvacs);
 }; // class Evac
 
 

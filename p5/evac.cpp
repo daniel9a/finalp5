@@ -4,61 +4,90 @@
 
 using namespace std;
 
-int RatioCmp(const void *ptr, const void *ptr2)
+int compare(const void *a, const void *b)
 {
-    if(((EvacInfo*)ptr)->ratio > ((EvacInfo*)ptr2)->ratio)
+    if(((EvacRoute4*)a)->numPeople > ((EvacRoute4*)b)->numPeople) {return -1;}
+    else if(((EvacRoute4*)a)->numPeople < ((EvacRoute4*)b)->numPeople) {return 1;}
+    else {return 0;}
+}
 
-        return -1;
+int Evac::dfs(int cityID, int required, int source)
+{
+    int sum = 0;
+    int capacityMax = 0;
 
+    if(cities[cityID].visited == false)
+    {
+        cities[cityID].visited = true;
+        visitedIDs[visitedSize++] = cityID;
+    }
     else
-
-    if(((EvacInfo*)ptr)->ratio < ((EvacInfo*)ptr2)->ratio)
-
-        return 1;
-
-    else
-
+    {
         return 0;
+    } // store as visited
+
+
+    if(cities[cityID].cityEvac == false) // if not marked evac then return amount
+    {
+        if(cities[cityID].population - cities[cityID].evacuees <= required)
+        {
+            sum = cities[cityID].population - cities[cityID].evacuees;
+            cities[cityID].evacuees = cities[cityID].population;
+        }
+        else
+        {
+            cities[cityID].evacuees = cities[cityID].evacuees + required;
+            return required;
+        }
+    }
+
+    int index = 0;
+
+    while((index < cities[cityID].roadCount) && (sum < required))
+    {
+
+        capacityMax = roads[cities[cityID].edgeID[index]].peoplePerHour - roads[cities[cityID].edgeID[index]].occupied;
+        if(capacityMax > required - sum)
+        {
+            capacityMax = required - sum;
+        }
+        capacityMax = dfs(roads[cities[cityID].edgeID[index]].destinationCityID, capacityMax, cityID);
+        roads[cities[cityID].edgeID[index]].occupied = roads[cities[cityID].edgeID[index]].occupied + capacityMax;
+        sum = sum + capacityMax;
+        if(0 < capacityMax)
+        {
+            roadsOccupied[count++] = cities[cityID].edgeID[index];
+        }
+        index++;
+    }
+    return sum;
 }
 
 Evac::Evac(City *citie, int numCitie, int numRoads) : numCities(numCitie)
 {
-
-    cities = new CityInfo[numCities];
-
-    edge = new RoadEdge[numRoads * 2];
-
-    usedRoads = new int[numRoads * 5]; // each road max 5
-
+    roadsOccupied = new int[numRoads * 5]; // each road max 5
     visitedIDs = new int[numCities];
+    numCities = numCitie;
+    cities = new City4[numCities];
+    roads = new Road4[numRoads * 2];
 
-    int id, numEdges;
-
-    for(int i = 0; i < numCitie; i++)
+    int index = 0;
+    while (index < numCitie)
     {
+        cities[citie[index].ID].evacuees = 0;
+        cities[citie[index].ID].population = citie[index].population;
+        cities[citie[index].ID].roadCount = citie[index].roadCount;
+        cities[citie[index].ID].edgeID = new int[citie[index].roadCount];
 
-        id = citie[i].ID;
-
-        cities[id].evacPeople = 0;
-
-        cities[id].maxPeople = citie[i].population;
-
-        cities[id].numEdges = numEdges = citie[i].roadCount;
-
-        cities[id].edgeID = new int[numEdges];
-
-        int roadID;
-
-        for(int j = 0; j < numEdges; j++)
+        int index2 = 0;
+        while(index2 < citie[index].roadCount)
         {
-
-            cities[id].edgeID[j] = roadID = citie[i].roads[j].ID;
-
-            edge[roadID].destCityID = citie[i].roads[j].destinationCityID;
-
-            edge[roadID].weight =  citie[i].roads[j].peoplePerHour;
-
+            cities[citie[index].ID].edgeID[index2] = citie[index].roads[index2].ID;
+            roads[citie[index].roads[index2].ID].destinationCityID = citie[index].roads[index2].destinationCityID;
+            roads[citie[index].roads[index2].ID].peoplePerHour =  citie[index].roads[index2].peoplePerHour;
+            index2++;
         }
+        index ++;
     }
 
 } // Evac()
@@ -67,271 +96,134 @@ Evac::Evac(City *citie, int numCitie, int numRoads) : numCities(numCitie)
 void Evac::evacuate(int *evacIDs, int numEvacs, EvacRoute *evacRoutes,
     int &routeCount)
 {
-
-    hour = 1;
-
+    int capacity;
     routeCount = 0;
-
-    evacQ = new int[numCities];
-
-    front = back = 0;
-
-    evacCities = new EvacInfo[numEvacs];
-
-    int id;
-
-    for(int i = 0; i < numEvacs; i++)
-    {
-
-        id = evacIDs[i];
-
-        cities[id].known = true;
-
-        cities[id].deadEnd = false;
-
-        cities[id].evacuatedCity = true;
-
-        cities[id].depth = 1;
-
-        evacQ[back] = id;
-
-        evacCities[i].ID = id;
-
-        back++;
-
-    } // enqueue evac cities
-
-    bool peopleRemaining = true;
-
+    queueF = 0;
+    queueB = 0;
+    timer = 1;
+    queue = new int[numCities];
+    evacCities = new EvacRoute4[numEvacs];
+    bool evacMore = true;
     visitedSize = 0;
 
-    while(peopleRemaining)
+    int index = 0;
+    while(index < numEvacs)
     {
+        cities[evacIDs[index]].cityEvac = true;
+        queue[queueB] = evacIDs[index];
+        evacCities[index].ID = evacIDs[index];
+        queueB++;
+        index++;
+    } // enqueue evac cities
 
-        int back2 = back, ID, destCityID;
+    while(evacMore == true)
+    {
+        int ID = 0;
+        int queueB2 = queueB;
 
-        for(int i = 0; i < back; i++)
-
-            cities[evacQ[i]].deadEnd = false;
-
-        while(front < back2)
+        while(queueF < queueB2)
         {
-
-            ID = evacQ[front++];
-
-            for(int j = 0; j < cities[ID].numEdges;)
+            int x = 0;
+            ID = queue[queueF++];
+            while(x < cities[ID].roadCount)
             {
-                destCityID = edge[cities[ID].edgeID[j]].destCityID;
 
-                if(!cities[destCityID].known)
+                int time2 = timer - 1;
+
+                if(time2 > 1)
                 {
-                    evacQ[back++] = destCityID;
-
-                    cities[ID].depth = hour + 1;
-
-                    cities[destCityID].known = true;
-
-                }
-
-                if(cities[destCityID].depth != 0 && cities[destCityID].depth < hour - 1)
-                {
-
-                    cities[ID].numEdges--;
-
-                    cities[ID].edgeID[j] = cities[ID].edgeID[cities[ID].numEdges];
-
-                    cities[ID].edgeID[cities[ID].numEdges] = cities[ID].edgeID[j];
-
+                   cities[ID].roadCount--;
+                   cities[ID].edgeID[cities[ID].roadCount] = cities[ID].edgeID[x];
+                   cities[ID].edgeID[x] = cities[ID].edgeID[cities[ID].roadCount];
                 } // remove edge
-                else
-
-                  j++;
-
+                else {
+                  x++;
+                }
             } // for connected edges
-
         } // while queue not end
-
-
-        int capacity;
-
-        if(peopleRemaining)
+        if(evacMore == true)
         {
-              //mark false if done
-              peopleRemaining = false;
-
-              for(int i = 0; i < numEvacs; i++)
+              int index = 0; //mark false if done
+              evacMore = false;
+              while(index < numEvacs)
               {
-
-                  int ID = evacCities[i].ID;
-
-                  if(cities[ID].evacPeople < cities[ID].maxPeople)
+                  if(cities[evacCities[index].ID].evacuees < cities[evacCities[index].ID].population)
                   {
-
-                      peopleRemaining = true;
-
                       capacity = 0;
-
-                      for(int j = 0; j < cities[ID].numEdges; j++)
+                      int index2 = 0;
+                      evacMore = true;
+                      while(index2 < cities[evacCities[index].ID].roadCount)
                       {
-
-                          if(edge[cities[ID].edgeID[j]].weight < cities[edge[cities[ID].edgeID[j]].destCityID].maxPeople)
-
-                                capacity += edge[cities[ID].edgeID[j]].weight;
-                          else
-
-                                capacity += cities[edge[cities[ID].edgeID[j]].destCityID].maxPeople;
+                          if(roads[cities[evacCities[index].ID].edgeID[index2]].peoplePerHour > cities[roads[cities[evacCities[index].ID].edgeID[index2]].destinationCityID].population){
+                                capacity += cities[roads[cities[evacCities[index].ID].edgeID[index2]].destinationCityID].population;
+                                index2++;
+                          }
+                          else {
+                                capacity += roads[cities[evacCities[index].ID].edgeID[index2]].peoplePerHour;
+                                index2++;
+                          }
 
                       } // calculate each edge capacity
-
-                      evacCities[i].ratio = (cities[ID].maxPeople - cities[ID].evacPeople) / capacity;
-
-                  } // not done
-
-              } // for remaining cities
-
-              if(peopleRemaining)
-
-                  qsort(evacCities, numEvacs, sizeof(EvacInfo), RatioCmp); // sort by max ratio
-
+                      evacCities[index].numPeople = (cities[evacCities[index].ID].population - cities[evacCities[index].ID].evacuees) / capacity;
+                  }
+                  index ++;
+              } // while remaining cities
+              if(evacMore == true)
+              {
+                  qsort(evacCities, numEvacs, sizeof(EvacRoute4), compare); // sort by max ratio
+              }
         }
-
-        usedCount = 0;
-
-        for(int i = 0; i < numEvacs; i++)
+        count = 0;
+        int index = 0;
+        while(index < numEvacs)
         {
-
-            int cityID = evacCities[i].ID;
-
-            int total = 0, difference;
-
-            int needed = cities[cityID].maxPeople - cities[cityID].evacPeople;
-
-            while(visitedSize > 0) // mark backroad not visited
-
+            int sum = 0;
+            int required = cities[evacCities[index].ID].population - cities[evacCities[index].ID].evacuees;
+            while(visitedSize > 0)
+            { // mark backroad not visited
                 cities[visitedIDs[--visitedSize]].visited = false;
-
-
-            visitedIDs[visitedSize++] = cityID;
-
-            cities[cityID].visited = true;
-
-            int edgeID, maxFlow;
-
-            for(int i = 0; i < cities[cityID].numEdges && total < needed; i++)
-            {
-                edgeID = cities[cityID].edgeID[i];
-
-                maxFlow = edge[edgeID].weight - edge[edgeID].used;
-
-                difference = needed - total;
-
-                if(maxFlow > difference)
-
-                    maxFlow = difference;
-
-                maxFlow = dfs(edge[edgeID].destCityID, maxFlow, cityID);
-
-                edge[edgeID].used += maxFlow;
-
-                total += maxFlow;
-
-                if(maxFlow > 0)
-
-                    usedRoads[usedCount++] = edgeID;
-
             }
-
-            cities[cityID].evacPeople += total;
-
+            cities[evacCities[index].ID].visited = true;
+            int capacityMax;
+            int index2 = 0;
+            visitedIDs[visitedSize++] = evacCities[index].ID;
+            while(index2 < cities[evacCities[index].ID].roadCount && sum < required)
+            {
+                capacityMax = roads[cities[evacCities[index].ID].edgeID[index2]].peoplePerHour - roads[cities[evacCities[index].ID].edgeID[index2]].occupied;
+                if(capacityMax > (required - sum))
+                {
+                    capacityMax = required - sum;
+                }
+                capacityMax = dfs(roads[cities[evacCities[index].ID].edgeID[index2]].destinationCityID, capacityMax, evacCities[index].ID);
+                roads[cities[evacCities[index].ID].edgeID[index2]].occupied = roads[cities[evacCities[index].ID].edgeID[index2]].occupied + capacityMax;
+                sum = sum + capacityMax;
+                if(capacityMax > 0)
+                {
+                    roadsOccupied[count++] = cities[evacCities[index].ID].edgeID[index2];
+                }
+                index2++;
+            }
+            cities[evacCities[index].ID].evacuees = cities[evacCities[index].ID].evacuees + sum;
+            index++;
         }
-
-        for(int i = 0; i < numCities; i++)
-
-            cities[i].visited = 0;
-
-        for(int i = 0; i < usedCount; i++)
+        index = 0;
+        while(index<numCities)
         {
-
-            evacRoutes[routeCount].roadID = usedRoads[i];
-
-            evacRoutes[routeCount].numPeople = edge[usedRoads[i]].used;
-
-            evacRoutes[routeCount++].time = hour;
-
-            edge[usedRoads[i]].used = 0;
-
-            cities[edge[usedRoads[i]].destCityID].visited = 0;
+            cities[index].visited = false;
+            index++;
         }
-          hour++;
+
+        index = 0;
+        while(index < count)
+        {
+            evacRoutes[routeCount].numPeople = roads[roadsOccupied[index]].occupied;
+            evacRoutes[routeCount].roadID = roadsOccupied[index];
+            cities[roads[roadsOccupied[index]].destinationCityID].visited = false;
+            roads[roadsOccupied[index]].occupied = 0;
+            evacRoutes[routeCount++].time = timer;
+            index++;
+        }
+          timer++;
     }
 
 } // evacuate
-
-
-int Evac::dfs(int cityID, int needed, int sourceCityID)
-{
-
-    if(cities[cityID].visited)
-
-      return 0;
-
-    else
-    {
-
-        cities[cityID].visited = true;
-
-        visitedIDs[visitedSize++] = cityID;
-
-    } // store as visited
-
-    int total = 0, difference;
-
-    if(!cities[cityID].evacuatedCity) // if not marked evac then return amount
-    {
-
-        difference = cities[cityID].maxPeople - cities[cityID].evacPeople;
-
-        if(needed <= difference)
-        {
-            cities[cityID].evacPeople += needed;
-
-            return needed;
-        }
-        else
-        {
-            total = difference;
-
-            cities[cityID].evacPeople = cities[cityID].maxPeople;
-        }
-    }
-
-    if(cities[cityID].deadEnd)
-
-        return total;
-
-    int maxFlow;
-
-    for(int i = 0; i < cities[cityID].numEdges && total < needed; i++)
-    {
-        if(edge[cities[cityID].edgeID[i]].destCityID == sourceCityID)
-
-            continue;
-
-        maxFlow = edge[cities[cityID].edgeID[i]].weight - edge[cities[cityID].edgeID[i]].used;
-
-        if(maxFlow > needed - total)
-
-            maxFlow = needed - total;
-
-        maxFlow = dfs(edge[cities[cityID].edgeID[i]].destCityID, maxFlow, cityID);
-
-        edge[cities[cityID].edgeID[i]].used += maxFlow;
-
-        total += maxFlow;
-
-        if(maxFlow > 0)
-
-            usedRoads[usedCount++] = cities[cityID].edgeID[i];
-    }
-    return total;
-}
